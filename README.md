@@ -2,6 +2,8 @@
 construction schedule generation and optimisation
 
 
+********** This page is being updated (05 Dec 2022); the first version to be release by end Dec **********
+
 This page gives a brief overview of the functionalities of the software tool. 
 
 The software implementation in this study consists of the following three parts:
