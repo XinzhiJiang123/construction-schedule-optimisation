@@ -1,0 +1,578 @@
+// This work is licensed under the Apache License 2.0
+//
+// This work uses Xbim toolkit, which is a .NET open-source software development BIM toolkit that supports 
+// 		the BuildingSmart Data Model (aka the Industry Foundation Classes IFC).
+// 		Link to Xbim toolkit and its license info: https://docs.xbim.net/index.html
+// 		Reference: Lockley, S., Benghi, C., Černý M., 2017. Xbim.Essentials: a library for interoperable building information applications. 
+// 		Journal of Open Source Software, 2(20), 473, https://doi.org/10.21105/joss.00473
+
+
+using Microsoft.Office.Tools.Ribbon;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+
+using System.Xml.Linq;
+using Microsoft.Office.Interop.Excel;
+using Microsoft.Office.Core;
+using Microsoft.Office.Tools.Excel;
+
+using System.Data;
+using System.Diagnostics;
+using System.IO;
+using System.Threading.Tasks;
+using Xbim.Common.Geometry;
+using Xbim.Common.XbimExtensions;
+using Xbim.Ifc;
+using Xbim.Ifc4.Interfaces;
+using Xbim.ModelGeometry.Scene;
+using Xbim.Ifc.Extensions;
+
+using Microsoft.Extensions.Logging;
+using Xbim.IO.Memory;
+using Xbim.Ifc4.GeometricModelResource;
+using Xbim.Ifc4.GeometryResource;
+using Xbim.Common.Exceptions;
+using Xbim.Geometry.Engine.Interop;
+
+using Xbim.Ifc4.Kernel;
+using Xbim.Ifc4.PropertyResource;
+using Xbim.Ifc4.MeasureResource;
+using Xbim.Ifc4.SharedBldgServiceElements;
+
+
+namespace R1_wExcel
+{
+    public partial class Ribbon1
+    {
+        private void Ribbon1_Load(object sender, RibbonUIEventArgs e)
+        {
+
+        }
+
+        private void btnReadIfc_Click(object sender, RibbonControlEventArgs e)
+        {
+            Microsoft.Office.Interop.Excel.Worksheet currentSheet = Globals.ThisAddIn.Application.ActiveSheet;
+
+            int locTitleRow = 1;   // which row the titles are in
+            // print the column titles
+            string[] titleNames = { "No.", "Global Id", "System", "Class", "Type", "Base Level", "Level","C_Level","C_Material",
+                "CentroidX","CentroidY","CentroidZ", "SizeX","SizeY","SizeZ", "Base offset", "Top offset", "Name"};
+            for (int i = 0; i < titleNames.Count(); i++)
+            {
+                Range rTitle = currentSheet.Range[Convert.ToChar(i + (int)'A').ToString() + locTitleRow];
+                rTitle.Value = titleNames[i];
+            }
+
+            const string file = @"...<directory to your .ifc file>...";  // please change the directory here
+            using (var model = IfcStore.Open(file))
+            {
+                var context = new Xbim3DModelContext(model);
+                context.CreateContext();
+
+                /////////////////////////// FOR COLUMNS ///////////////////////////////////
+                //get all instances of the same class
+                var allInstanceOfType = model.Instances.OfType<IIfcColumn>();
+                // both "column" and "structural column" are included
+                int i = 0;
+                Range rID, rSystem, rClass, rType, rBaseLevel, rMaterial, rCentroidX, rCentroidY, rCentroidZ, 
+                    rSizeX, rSizeY, rSizeZ, rBaseOffset, rTopOffset, rName;
+                foreach (var theInst in allInstanceOfType)
+                {
+                    rID = currentSheet.Range["B" + (i + locTitleRow + 1)];
+                    rSystem = currentSheet.Range["C" + (i + locTitleRow + 1)];
+                    rClass = currentSheet.Range["D" + (i + locTitleRow + 1)];
+                    rType = currentSheet.Range["E" + (i + locTitleRow + 1)];
+                    rBaseLevel = currentSheet.Range["F" + (i + locTitleRow + 1)];
+                    rMaterial = currentSheet.Range["I" + (i + locTitleRow + 1)];
+                    rCentroidX = currentSheet.Range["J" + (i + locTitleRow + 1)];
+                    rCentroidY = currentSheet.Range["K" + (i + locTitleRow + 1)];
+                    rCentroidZ = currentSheet.Range["L" + (i + locTitleRow + 1)];
+                    rSizeX = currentSheet.Range["M" + (i + locTitleRow + 1)];
+                    rSizeY = currentSheet.Range["N" + (i + locTitleRow + 1)];
+                    rSizeZ = currentSheet.Range["O" + (i + locTitleRow + 1)];
+                    rBaseOffset = currentSheet.Range["P" + (i + locTitleRow + 1)];
+                    rTopOffset = currentSheet.Range["Q" + (i + locTitleRow + 1)];
+                    rName = currentSheet.Range["R" + (i + locTitleRow + 1)];
+
+                    rID.Value = theInst.GlobalId.ToString();
+                    rSystem.Value = "Structure";
+                    rClass.Value = "Column";    // incl. structural columns and columns
+                    rName.Value = theInst.Name.ToString();
+
+                    // Find all single value properties
+                    var properties = theInst.IsDefinedBy
+                        .Where(r => r.RelatingPropertyDefinition is IIfcPropertySet)
+                        .SelectMany(r => ((IIfcPropertySet)r.RelatingPropertyDefinition).HasProperties)
+                        .OfType<IIfcPropertySingleValue>();
+                    
+                    //// Find value of a specific singlle value property
+                    foreach (var property in properties)
+                    {
+                        string str = property.Name;
+                        string strPropValue = property.NominalValue.ToString();
+                        //Returns the zero-based index position of value if that string is found, or -1 if it is not.
+                        //If value is String.Empty, the return value is 0.
+                        if (str.IndexOf("level", 0, StringComparison.CurrentCultureIgnoreCase) != -1)
+                        {
+                            if (str.IndexOf("base", 0, StringComparison.CurrentCultureIgnoreCase) != -1)
+                                rBaseLevel.Value = property.NominalValue.ToString();
+                        }
+                        if (str.IndexOf("offset", 0, StringComparison.CurrentCultureIgnoreCase) != -1)
+                        //Returns the zero-based index position of value if that string is found, or -1 if it is not.
+                        //If value is String.Empty, the return value is 0.
+                        {
+                            if (str.IndexOf("base", 0, StringComparison.CurrentCultureIgnoreCase) != -1)
+                                rBaseOffset.Value = property.NominalValue.ToString();
+                            if (str.IndexOf("top", 0, StringComparison.CurrentCultureIgnoreCase) != -1)
+                                rTopOffset.Value = property.NominalValue.ToString();
+                        }
+                        if (str.IndexOf("type", 0, StringComparison.CurrentCultureIgnoreCase) != -1)
+                            rType.Value = property.NominalValue.ToString();
+
+                        // Find placement coordinates and size of boundingbox
+                        List<Xbim.Common.Geometry.XbimShapeInstance> instances = context.ShapeInstancesOf(theInst).ToList();
+                        bool isNullOrEmpty = instances?.Any() != true;
+                        if (isNullOrEmpty == false)
+                        {
+                            foreach (var instance in instances)
+                            {
+                                var global_pos = instance.Transformation.Translation; //Transformation matrix (location point inside)
+                                Xbim.Common.Geometry.XbimShapeGeometry geometry = context.ShapeGeometry(instance);   //Instance's geometry
+                                Xbim.Common.Geometry.XbimRect3D box = geometry.BoundingBox; //bounding box
+
+                                var wallPlacement = theInst.ObjectPlacement as IIfcLocalPlacement;
+                                var wallTransform = wallPlacement.ToMatrix3D();
+                                var boxTrans = box.Transform(wallTransform);
+                                box = boxTrans;
+
+                                rSizeX.Value = box.SizeX.ToString();
+                                rSizeY.Value = box.SizeY.ToString();
+                                rSizeZ.Value = box.SizeZ.ToString();
+
+                                Xbim.Common.Geometry.XbimPoint3D centroidpt = box.Centroid();
+                                rCentroidX.Value = centroidpt.X;
+                                rCentroidY.Value = centroidpt.Y;
+                                rCentroidZ.Value = centroidpt.Z;
+                            }
+                        }
+                    }
+                    i++;
+                }
+                Debug.WriteLine($"Number of columns: {i}");  // for debugging
+                Debug.WriteLine(" ");  // for debugging
+
+
+
+                /////////////////////////// FOR BEAMS ///////////////////////////////////
+                int sRowCount = currentSheet.UsedRange.Rows.Count;
+                i = 0;
+                var allInstanceOfTypeBeam = model.Instances.OfType<IIfcBuildingElementProxy>();
+                //Range rID, rClass, rBaseLevel, rSizeX, rSizeY, rSizeZ, rBaseOffset, rTopOffset, rCoordX, rCoordY, rCoordZ;
+                foreach (var theInst in allInstanceOfTypeBeam)
+                {
+                    int c = 1;  // if c=2, i starting from 0: one blank row in between
+                    rID = currentSheet.Range["B" + (sRowCount + i + c)];
+                    rSystem = currentSheet.Range["C" + (sRowCount + i + c)];
+                    rClass = currentSheet.Range["D" + (sRowCount + i + c)];
+                    rType = currentSheet.Range["E" + (sRowCount + i + c)];
+                    rBaseLevel = currentSheet.Range["F" + (sRowCount + i + c)];
+                    rMaterial = currentSheet.Range["I" + (sRowCount + i + c)];
+                    rCentroidX = currentSheet.Range["J" + (sRowCount + i + c)];
+                    rCentroidY = currentSheet.Range["K" + (sRowCount + i + c)];
+                    rCentroidZ = currentSheet.Range["L" + (sRowCount + i + c)];
+                    rSizeX = currentSheet.Range["M" + (sRowCount + i + c)];
+                    rSizeY = currentSheet.Range["N" + (sRowCount + i + c)];
+                    rSizeZ = currentSheet.Range["O" + (sRowCount + i + c)];
+                    rBaseOffset = currentSheet.Range["P" + (sRowCount + i + c)];
+                    rTopOffset = currentSheet.Range["Q" + (sRowCount + i + c)];
+                    rName = currentSheet.Range["R" + (sRowCount + i + c)];
+                    rID.Value = theInst.GlobalId.ToString();
+                    rSystem.Value = "Structure";
+                    rClass.Value = "Building Element Proxy";
+                    rName.Value = theInst.Name.ToString();
+
+                    // Find all single value properties
+                    var properties = theInst.IsDefinedBy
+                        .Where(r => r.RelatingPropertyDefinition is IIfcPropertySet)
+                        .SelectMany(r => ((IIfcPropertySet)r.RelatingPropertyDefinition).HasProperties)
+                        .OfType<IIfcPropertySingleValue>();
+                    // Find value of a specific singlle value property
+                    foreach (var property in properties)
+                    {
+                        string str = property.Name;
+                        string strPropValue = property.NominalValue.ToString();
+                        
+                        if (str.IndexOf("level", 0, StringComparison.CurrentCultureIgnoreCase) != -1)
+                        {
+                            rBaseLevel.Value = strPropValue;
+                        }
+                        // property name: Elevation from Level
+                        // to check: base or top level; elevation from which level
+                        if (str.IndexOf("elevation from level", 0, StringComparison.CurrentCultureIgnoreCase) != -1)  
+                            rBaseOffset.Value = strPropValue;
+                        if (str.IndexOf("type", 0, StringComparison.CurrentCultureIgnoreCase) != -1)
+                            rType.Value = property.NominalValue.ToString();
+
+                        // Find placement coordinates and size of boundingbox
+                        List<Xbim.Common.Geometry.XbimShapeInstance> instances = context.ShapeInstancesOf(theInst).ToList();
+                        bool isNullOrEmpty = instances?.Any() != true;
+                        if (isNullOrEmpty == false)
+                        {
+                            foreach (var instance in instances)
+                            {
+                                var global_pos = instance.Transformation.Translation; //Transformation matrix (location point inside)
+                                Xbim.Common.Geometry.XbimShapeGeometry geometry = context.ShapeGeometry(instance);   //Instance's geometry
+                                Xbim.Common.Geometry.XbimRect3D box = geometry.BoundingBox; //bounding box
+                                
+                                var wallPlacement = theInst.ObjectPlacement as IIfcLocalPlacement;
+                                var wallTransform = wallPlacement.ToMatrix3D();
+                                var boxTrans = box.Transform(wallTransform);
+                                box = boxTrans;
+
+                                rSizeX.Value = box.SizeX.ToString();
+                                rSizeY.Value = box.SizeY.ToString();
+                                rSizeZ.Value = box.SizeZ.ToString();
+                                Xbim.Common.Geometry.XbimPoint3D centroidpt =  box.Centroid();
+                                rCentroidX.Value = centroidpt.X;
+                                rCentroidY.Value = centroidpt.Y;
+                                rCentroidZ.Value = centroidpt.Z;
+                            }
+                        }
+                    }
+                    i++;
+                }
+                Debug.WriteLine($"Number of beams: {i}");  // for debugging
+
+
+            }
+        }
+
+
+
+        private void btnGetLevel_Click(object sender, RibbonControlEventArgs e)  // print the floor elevations
+        {
+            const string file = @"...<directory to your .ifc file>...";  // please change the directory here
+            using (var model = IfcStore.Open(file))
+            {
+                var context = new Xbim3DModelContext(model);
+                context.CreateContext();
+
+                Microsoft.Office.Interop.Excel.Worksheet currentSheet = Globals.ThisAddIn.Application.ActiveSheet;
+                int sRowCount = currentSheet.UsedRange.Rows.Count;
+                Range rPrintLevel;
+                int levCount = 0;
+                var allStoreys = model.Instances.OfType<IIfcBuildingStorey>();
+                // Print the floor level info to the end of the sheet
+                foreach (var theLevel in allStoreys)
+                {
+                    Debug.WriteLine($"level of building = {theLevel.Elevation} ");
+                    rPrintLevel = currentSheet.Range["B" + (sRowCount + levCount + 2)];
+                    rPrintLevel.Value = $"Level 0{levCount} elevation = {theLevel.Elevation} mm";
+                    levCount++;
+                }
+            }
+        }
+
+
+
+
+
+
+
+        private void btn_ReadIFC_MEP_Click(object sender, RibbonControlEventArgs e)
+        {
+            Microsoft.Office.Interop.Excel.Worksheet currentSheet = Globals.ThisAddIn.Application.ActiveSheet;
+
+            int locTitleRow = 1;   // which row the titles are in
+            // print the column titles
+            string[] titleNames = { "No.", "Global Id", "System", "Class", "Type", "Base Level", "Level","C_Level","C_Material",
+                "CentroidX","CentroidY","CentroidZ", "SizeX","SizeY","SizeZ", "Base offset", "Top offset", "Name", "Length"};
+            for (int i = 0; i < titleNames.Count(); i++)
+            {
+                Range rTitle = currentSheet.Range[Convert.ToChar(i + (int)'A').ToString() + locTitleRow];
+                rTitle.Value = titleNames[i];
+            }
+
+            const string file = @"...<directory to your .ifc file>...";  // please change the directory here
+            using (var model = IfcStore.Open(file))
+            {
+                var context = new Xbim3DModelContext(model);
+                context.CreateContext();
+
+                /////////////////////////// FOR FLOW SEGMENTS ///////////////////////////////////
+                int i = 0;
+                Range rID, rSystem, rClass, rType, rBaseLevel, rMaterial, rCentroidX, rCentroidY, rCentroidZ,
+                    rSizeX, rSizeY, rSizeZ, rBaseOffset, rTopOffset, rName, rLength;
+                foreach (var theInst in allInstanceOfType)
+                {
+                    rID = currentSheet.Range["B" + (i + locTitleRow + 1)];
+                    rSystem = currentSheet.Range["C" + (i + locTitleRow + 1)];
+                    rClass = currentSheet.Range["D" + (i + locTitleRow + 1)];
+                    rType = currentSheet.Range["E" + (i + locTitleRow + 1)];
+                    rBaseLevel = currentSheet.Range["F" + (i + locTitleRow + 1)];
+                    rMaterial = currentSheet.Range["I" + (i + locTitleRow + 1)];
+                    rCentroidX = currentSheet.Range["J" + (i + locTitleRow + 1)];
+                    rCentroidY = currentSheet.Range["K" + (i + locTitleRow + 1)];
+                    rCentroidZ = currentSheet.Range["L" + (i + locTitleRow + 1)];
+                    rSizeX = currentSheet.Range["M" + (i + locTitleRow + 1)];
+                    rSizeY = currentSheet.Range["N" + (i + locTitleRow + 1)];
+                    rSizeZ = currentSheet.Range["O" + (i + locTitleRow + 1)];
+                    rBaseOffset = currentSheet.Range["P" + (i + locTitleRow + 1)];
+                    rTopOffset = currentSheet.Range["Q" + (i + locTitleRow + 1)];
+                    rName = currentSheet.Range["R" + (i + locTitleRow + 1)];
+                    rLength = currentSheet.Range["S" + (i + locTitleRow + 1)];
+
+                    rID.Value = theInst.GlobalId.ToString();
+                    rSystem.Value = "Mechanical";
+                    rClass.Value = "Flow segment";    
+                    rName.Value = theInst.Name.ToString();
+
+                    // Find all single value properties
+                    var properties = theInst.IsDefinedBy
+                        .Where(r => r.RelatingPropertyDefinition is IIfcPropertySet)
+                        .SelectMany(r => ((IIfcPropertySet)r.RelatingPropertyDefinition).HasProperties)
+                        .OfType<IIfcPropertySingleValue>();
+
+                    //// Find value of a specific singlle value property
+                    foreach (var property in properties)
+                    {
+                        string str = property.Name;
+                        string strPropValue = property.NominalValue.ToString();
+                        
+                        if (str.IndexOf("level", 0, StringComparison.CurrentCultureIgnoreCase) != -1)
+                        {
+                            if (str.IndexOf("base", 0, StringComparison.CurrentCultureIgnoreCase) != -1)
+                                rBaseLevel.Value = property.NominalValue.ToString();
+                        }
+                        if (str.IndexOf("offset", 0, StringComparison.CurrentCultureIgnoreCase) != -1)
+                        //Returns the zero-based index position of value if that string is found, or -1 if it is not.
+                        //If value is String.Empty, the return value is 0.
+                        {
+                            if (str.IndexOf("base", 0, StringComparison.CurrentCultureIgnoreCase) != -1)
+                                rBaseOffset.Value = property.NominalValue.ToString();
+                            if (str.IndexOf("top", 0, StringComparison.CurrentCultureIgnoreCase) != -1)
+                                rTopOffset.Value = property.NominalValue.ToString();
+                        }
+                        if (str.IndexOf("type", 0, StringComparison.CurrentCultureIgnoreCase) != -1)
+                            rType.Value = property.NominalValue.ToString();
+                        if (str.IndexOf("length", 0, StringComparison.CurrentCultureIgnoreCase) != -1)
+                            rLength.Value = property.NominalValue.ToString();
+                    }
+
+                    // Find placement coordinates and size of boundingbox
+                    List<Xbim.Common.Geometry.XbimShapeInstance> instances = context.ShapeInstancesOf(theInst).ToList();
+                    //Debug.WriteLine($"instances.Count = {instances.Count}");
+                    bool isNullOrEmpty = instances?.Any() != true;
+                    //Debug.WriteLine($"isNullOrEmpty = {isNullOrEmpty}");
+                    if (isNullOrEmpty == false)
+                    {
+                        foreach (var instance in instances)
+                        {
+                            var global_pos = instance.Transformation.Translation; //Transformation matrix (location point inside)
+                            Xbim.Common.Geometry.XbimShapeGeometry geometry = context.ShapeGeometry(instance);   //Instance's geometry
+                            Xbim.Common.Geometry.XbimRect3D box = geometry.BoundingBox; //bounding box
+
+                            var wallPlacement = theInst.ObjectPlacement as IIfcLocalPlacement;
+                            var wallTransform = wallPlacement.ToMatrix3D();
+                            var boxTrans = box.Transform(wallTransform);
+                            box = boxTrans;
+
+                            rSizeX.Value = box.SizeX.ToString();
+                            rSizeY.Value = box.SizeY.ToString();
+                            rSizeZ.Value = box.SizeZ.ToString();
+                            Xbim.Common.Geometry.XbimPoint3D centroidpt = box.Centroid();
+                            rCentroidX.Value = centroidpt.X;
+                            rCentroidY.Value = centroidpt.Y;
+                            rCentroidZ.Value = centroidpt.Z;
+                        }
+                    }
+                    i++;
+                }
+                Debug.WriteLine($"Number of flow segments: {i}");
+                Debug.WriteLine(" ");
+
+
+                /////////////////////////// FOR FLOW FITTINGS ///////////////////////////////////
+                int sRowCount = currentSheet.UsedRange.Rows.Count;
+                i = 0;
+                var allInstanceOfTypeBeam = model.Instances.OfType<IIfcFlowFitting>();
+                foreach (var theInst in allInstanceOfTypeBeam)
+                {
+                    int c = 1;  // if c=2, i starting from 0: one blank row in between
+                    rID = currentSheet.Range["B" + (sRowCount + i + c)];
+                    rSystem = currentSheet.Range["C" + (sRowCount + i + c)];
+                    rClass = currentSheet.Range["D" + (sRowCount + i + c)];
+                    rType = currentSheet.Range["E" + (sRowCount + i + c)];
+                    rBaseLevel = currentSheet.Range["F" + (sRowCount + i + c)];
+                    rMaterial = currentSheet.Range["I" + (sRowCount + i + c)];
+                    rCentroidX = currentSheet.Range["J" + (sRowCount + i + c)];
+                    rCentroidY = currentSheet.Range["K" + (sRowCount + i + c)];
+                    rCentroidZ = currentSheet.Range["L" + (sRowCount + i + c)];
+                    rSizeX = currentSheet.Range["M" + (sRowCount + i + c)];
+                    rSizeY = currentSheet.Range["N" + (sRowCount + i + c)];
+                    rSizeZ = currentSheet.Range["O" + (sRowCount + i + c)];
+                    rBaseOffset = currentSheet.Range["P" + (sRowCount + i + c)];
+                    rTopOffset = currentSheet.Range["Q" + (sRowCount + i + c)];
+                    rName = currentSheet.Range["R" + (sRowCount + i + c)];
+                    rID.Value = theInst.GlobalId.ToString();
+                    rSystem.Value = "Mechanical";
+                    rClass.Value = "Flow fitting";
+                    rName.Value = theInst.Name.ToString();
+
+                    // Find all single value properties
+                    var properties = theInst.IsDefinedBy
+                        .Where(r => r.RelatingPropertyDefinition is IIfcPropertySet)
+                        .SelectMany(r => ((IIfcPropertySet)r.RelatingPropertyDefinition).HasProperties)
+                        .OfType<IIfcPropertySingleValue>();
+                    // Find value of a specific single value property
+                    foreach (var property in properties)
+                    {
+                        string str = property.Name;
+                        string strPropValue = property.NominalValue.ToString();
+                        if (str.IndexOf("level", 0, StringComparison.CurrentCultureIgnoreCase) != -1)
+                        {
+                            rBaseLevel.Value = strPropValue;
+                        }
+                        // property name: Elevation from Level
+                        // to check: base or top level; elevation from which level
+                        if (str.IndexOf("elevation from level", 0, StringComparison.CurrentCultureIgnoreCase) != -1)
+                            rBaseOffset.Value = strPropValue;
+                        if (str.IndexOf("type", 0, StringComparison.CurrentCultureIgnoreCase) != -1)
+                            rType.Value = property.NominalValue.ToString();
+                    }
+
+                    // Find placement coordinates and size of boundingbox
+                    List<Xbim.Common.Geometry.XbimShapeInstance> instances = context.ShapeInstancesOf(theInst).ToList();
+                    bool isNullOrEmpty = instances?.Any() != true;
+                    if (isNullOrEmpty == false)
+                    {
+                        //double Xmin, Xmax, Ymin, Ymax, Zmin, Zmax;
+                        List<double> CoordX_list = new List<double>();
+                        List<double> CoordY_list = new List<double>();
+                        List<double> CoordZ_list = new List<double>();
+                        //int count_temp = 0;
+                        foreach (var instance in instances)
+                        {
+                            var global_pos = instance.Transformation.Translation; //Transformation matrix (location point inside)
+                            Xbim.Common.Geometry.XbimShapeGeometry geometry = context.ShapeGeometry(instance);   //Instance's geometry
+                            Xbim.Common.Geometry.XbimRect3D box = geometry.BoundingBox; //bounding box
+
+                            var wallPlacement = theInst.ObjectPlacement as IIfcLocalPlacement;
+                            var wallTransform = wallPlacement.ToMatrix3D();
+                            var boxTrans = box.Transform(wallTransform);
+                            box = boxTrans;
+                            Xbim.Common.Geometry.XbimPoint3D centroidpt = box.Centroid();
+                            CoordX_list.Add(centroidpt.X - box.SizeX / 2);
+                            CoordX_list.Add(centroidpt.X + box.SizeX / 2);
+                            CoordY_list.Add(centroidpt.Y - box.SizeY / 2);
+                            CoordY_list.Add(centroidpt.Y + box.SizeY / 2);
+                            CoordZ_list.Add(centroidpt.Z - box.SizeZ / 2);
+                            CoordZ_list.Add(centroidpt.Z + box.SizeZ / 2);
+                        }
+                        rSizeX.Value = CoordX_list.Max() - CoordX_list.Min();
+                        rSizeY.Value = CoordY_list.Max() - CoordY_list.Min();
+                        rSizeZ.Value = CoordZ_list.Max() - CoordZ_list.Min();
+                        rCentroidX.Value = (CoordX_list.Max() + CoordX_list.Min()) / 2;
+                        rCentroidY.Value = (CoordY_list.Max() + CoordY_list.Min()) / 2;
+                        rCentroidZ.Value = (CoordZ_list.Max() + CoordZ_list.Min()) / 2;
+                    }
+                    i++;
+                }
+                Debug.WriteLine($"Number of flow fittings: {i}");
+                Debug.WriteLine(" ");
+            }
+
+
+
+
+
+        }
+
+        private void btn_writeIdxIntoIfc_Click(object sender, RibbonControlEventArgs e)  // write indices into .ifc file
+																						 // CAUTION: takes long time
+        {
+            // test writing idx into ifc using a toTest .ifc file
+
+            Microsoft.Office.Interop.Excel.Worksheet currentSheet = Globals.ThisAddIn.Application.ActiveSheet;
+
+            const string file = @"...<directory to your .ifc file>...";  // please change the directory here
+            var editor = new XbimEditorCredentials
+            {
+                ApplicationDevelopersName = "xbim developer",
+                ApplicationFullName = "xbim toolkit",
+                ApplicationIdentifier = "xbim",
+                ApplicationVersion = "4.0",
+                EditorsFamilyName = "Jiang",
+                EditorsGivenName = "GivenName",
+                EditorsOrganisationName = "Independent Architecture"
+            };
+
+            using (var model = IfcStore.Open(file, editor))
+            {
+                var context = new Xbim3DModelContext(model);
+                context.CreateContext();
+
+                int sRowCount = currentSheet.UsedRange.Rows.Count;
+                int locTitleRow = 1;
+                int i = 0;
+                var allInstanceOfType = model.Instances.OfType<IIfcFlowFitting>();
+                Range rID, rClass, rNum;
+                for (int row = 1500; row < 2217; row++)
+                    //for (int row = 0; row < sRowCount - locTitleRow; row++)
+                    {
+                    rID = currentSheet.Range["B" + (row + locTitleRow + 1)];
+                    rClass = currentSheet.Range["D" + (row + locTitleRow + 1)];
+                    rNum = currentSheet.Range["A" + (row + locTitleRow + 1)];
+                    rNum.Value = Convert.ToString(row + 1);
+
+                    // find the compo instance with a specific Guid
+                    //id = "0A_AnWNoL4h8tXFat4uG5d";   // 12283 duct fitting (large) 
+                    //var id = "3Svz$0q_18zg9nfbWDn9K8";   // 12283 duct fitting (small)
+                    var id = rID.Value;
+                    var theInstance1 = model.Instances.FirstOrDefault<IfcFlowSegment>(d => d.GlobalId == id);
+                    //if (theInstance1 == null)
+                    //    var theInstance2 = model.Instances.FirstOrDefault<IfcFlowFitting>(d => d.GlobalId == id);
+
+
+                    // from xbim example
+                    //open transaction for changes
+                    using (var txn = model.BeginTransaction("Adding compo index"))
+                    {
+                        //create new property set with two properties
+                        var pSetRel = model.Instances.New<IfcRelDefinesByProperties>(r =>
+                        {
+                            r.GlobalId = Guid.NewGuid();
+                            r.RelatingPropertyDefinition = model.Instances.New<IfcPropertySet>(pSet =>
+                            {
+                                pSet.Name = "New property set";
+                                //all collections are always initialized
+                                pSet.HasProperties.Add(model.Instances.New<IfcPropertySingleValue>(p =>
+                                {
+                                    p.Name = "First property";
+                                    if (Convert.ToString(row + 1).Length == 1)
+                                        p.NominalValue = new IfcLabel("0000" + Convert.ToString(row + 1));
+                                    else if (Convert.ToString(row + 1).Length == 2)
+                                        p.NominalValue = new IfcLabel("000" + Convert.ToString(row + 1));
+                                    else if (Convert.ToString(row + 1).Length == 3)
+                                        p.NominalValue = new IfcLabel("00" + Convert.ToString(row + 1));
+                                    else if (Convert.ToString(row + 1).Length == 4)
+                                        p.NominalValue = new IfcLabel("0" + Convert.ToString(row + 1));
+                                    else
+                                        p.NominalValue = new IfcLabel(Convert.ToString(row + 1));
+                                    Debug.WriteLine(Convert.ToString(row + 1));
+                                }));
+                            });
+                        });
+                        pSetRel.RelatedObjects.Add(theInstance1);
+                        //commit changes
+                        txn.Commit();
+                    }
+                    model.SaveAs(@"...<directory to your new .ifc file (with new indices)>...");  // please change the directory here
+                }                   
+
+            }
+        }
+    }
+}
