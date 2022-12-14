@@ -2,6 +2,6 @@ There are two .ifc files for the sample case:
 - structural (~115MB)
 - mechanical/plumbing (~531MB)
 
-These files are too large to be shared in GitHub. But they can be downloaded from a publicly accessible Google Drive folder, at:
+These files are too large to be shared in GitHub. Instead, they can be downloaded from a publicly accessible Google Drive folder, at:
 
 https://drive.google.com/drive/folders/1grtSF4BfzHDR2HcSaCImVrTkMqrH_HeR?usp=share_link
