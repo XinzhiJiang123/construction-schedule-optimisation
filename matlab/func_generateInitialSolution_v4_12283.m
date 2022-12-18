@@ -1,61 +1,6 @@
 function [x0, x0_reshaped_after, ESa, EFa, ESar, EFar, Uard_sumA] = func_generateInitialSolution_v3(duration, cost, nA, nD, nR, nM, nvars, ...
     Qrd, seq_pred_x0, seq_succ_x0, buffer, UR_ar, URp_ar, options)
 
-% nA = 6;
-% duration = zeros(nA, 2, 2);
-% duration(:,1,1) = [2 1 2 3 0 0];
-% duration(:,1,2) = 0.7 * duration(:,1,1);
-% duration(:,2,1) = [0 0 0 0 4 2];
-% duration(:,2,2) = 0.7 * duration(:,1,1);
-% 
-% cost = zeros(nA, 2, 2);
-% cost(:,1,1) = [20 10 10 10 0 0];
-% cost(:,1,2) = 1.3 * cost(:,1,1);
-% cost(:,2,1) = [0 0 0 0 30 40];
-% cost(:,2,2) = 1.3 * cost(:,1,1);
-% 
-% nD = sum(duration(:,:,1), 'all') + 1; 
-% nR = 2;
-% nM = 2;
-% nvars = nA*(2 + nR*(2 + nM + 3 * nD));
-% Qrd = 2*ones(nR, nD);
-% 
-% seq_pred = [1 1 2  4 4 3 6 ];
-% seq_succ = [2 5 3  2 3 6 5 ];
-% buffer = zeros(1, length(seq_pred));
-% % buffer(2) = 1;
-% 
-% UR_ar = zeros(nA, nR);
-% URp_ar = zeros(nA, nR);
-% UR_ar = [1 nD; 1 nD; 1 nD; 1 nD; nD 1; nD 1];
-% URp_ar = [1 0; 1 0; 1 0; 1 0; 0 1; 0 1];
-% 
-% % % test: all two res are used in all activities
-% % duration(:,1,1) = [2 1 2 1];
-% % duration(:,1,2) = 0.7 * duration(:,1,1);
-% % duration(:,2,:) = duration(:,1,:);
-% % cost(:,1,1) = [20 10 30 40];
-% % cost(:,1,2) = 1.3 * cost(:,1,1);
-% % cost(:,2,:) = cost(:,1,:);
-% % UR_ar = [1 1; 1 1; 1 1; 1 1];  % all two res are used in all activities
-% % URp_ar = [1 1; 1 1; 1 1; 1 1];
-% 
-
-% duration = duration_struct;
-% cost = cost_struct;
-% nA = nA_struct;
-% nD = nD_struct;
-% nvars = nvars_struct;
-% Qrd = Qrd_struct;
-% seq_pred_x0 = seq_pred_x0_struct;
-% seq_succ_x0 = seq_succ_x0_struct;
-% seq_pred = seq_pred_struct;
-% seq_succ = seq_succ_struct;
-% buffer = buffer_struct;
-% UR_ar = UR_ar_struct;
-% URp_ar = URp_ar_struct;
-% coeffCost = 1- coeffDura;
-
 n1Res = 2+nM+3*nD;
 n1Act = 2+nR*(2+nM+3*nD);
 
@@ -487,75 +432,6 @@ for instance = 1:10
             (nA, nR, seq_pred_x0, seq_succ_x0, duration, Qrd, UR_ar, URp_ar, buffer, ...
             ESa, EFa, ESar, EFar, Uard_sumA, Uard);
 end
-
-
-
-
-
-
-
-
-% for a = 1:nA
-%     if ~isempty(find(seq_succ_x0 == a, 1))  % if inside the successor list
-%         % find all its predecessors
-%         pred_list = find(seq_succ_x0 == a);
-%         % find the max (EF + buffer) date of all predecessors
-%         pred_EF_plusBuffer = max(EFa(seq_pred_x0(pred_list)) + buffer(pred_list)');
-%     else  % if not inside the successor list
-%         pred_EF_plusBuffer = 1;
-%     end
-%     % check if there is enough resource available during the span of the activity
-%     % for each r and d
-%     for res = 1:nR
-%         % res checking
-%         d_toCheck = pred_EF_plusBuffer + 1;
-%         for checktimes = pred_EF_plusBuffer : ESar(a,res)
-%             flagToBreakOutOfNestedLoop2_count = 0;
-%             if duration(a,res,1) ~= 0
-%                 for d_delta = 0 : duration(a,res,1) - 1
-%                     d = d_toCheck + d_delta;
-%                     if Uard_sumA(res,d) + 1 > Qrd(res,d)  % if not enough res availibility
-%                         d_toCheck = d_toCheck + 1;  % if not enough res, then check the next day
-%                         earliestDate = d_toCheck;
-%                     else  % if there is enough res availability
-%                         flagToBreakOutOfNestedLoop2_count = ...
-%                             flagToBreakOutOfNestedLoop2_count + 1; % count how many days checked have enough res
-%                         earliestDate = d_toCheck;  % no effect here, but to prevent isempty(earliestDate)                           
-%                     end
-%                     % if enough res for all d_delta, then break out of this nested for loop
-%                     if (flagToBreakOutOfNestedLoop2_count == duration(a,res,1))
-%                         break
-%                     end
-%                 end
-%             else
-%                 earliestDate = d_toCheck;
-%             end
-%         end  
-%         
-%         if ESar(a, res) > earliestDate  % if an earlier date is really possible and checked for res availability
-%             % reset Uard and Uard_sumA
-%             for d = ESar(a,res) : EFar(a,res)
-%                 Uard(a,res,d) = Uard(a,res,d) - 1;  % reset
-%                 Uard_sumA(res,d) = sum(Uard(:,res,d), 'all');  % reset
-%             end
-%             % ES_ar = max{pred_EF_plusBuffer, earliestDate}
-%             ESar(a, res) = earliestDate;
-%             % EF_ar = ES_ar + duration - 1
-%             EFar(a,res) = ESar(a,res) + duration(a,res,1) - 1;
-%             % update Uard, Uard_sumA, based on ES_ar, EF_ar
-%             for d = ESar(a,res) : EFar(a,res)
-%                 Uard(a,res,d) = Uard(a,res,d) + 1;
-%                 Uard_sumA(res,d) = sum(Uard(:,res,d), 'all'); 
-%             end
-%         end
-%         % update ESa, EFa
-%         ESa(a) = min(UR_ar(a,:).*ESar(a,:));
-%         EFa(a) = max(URp_ar(a,:).*EFar(a,:));   
-%     end
-% end
-% ESEFar = [ESar, EFar];
-% ESEFa = [ESa, EFa];
-%
 
 
 
