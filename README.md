@@ -36,6 +36,8 @@ This tool consists of three parts:
 
 3. Excel macro workbook
 
+Link to a video demo: https://drive.google.com/drive/folders/1grtSF4BfzHDR2HcSaCImVrTkMqrH_HeR?usp=share_link
+
 ***********
 
 Contents
